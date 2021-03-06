@@ -2,35 +2,32 @@ from random import randint
 import sqlite3
 
 
-class SimpleBankingSystem:
-    start_menu = f'1. Create an account \n2. Log into account \n0. Exit'
-    login_menu = f'1. Balance\n2. Add income\n3. Do transfer\n4. Close account\n5. Log out\n0. Exit'
-    bank_iin = 400000  # Issuer Identification Number (IIN)
+class BankingDatabase:
     db_file = '../card.s3db'
+    sql_create_card_table = """CREATE TABLE IF NOT EXISTS card (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT
+                        , number TEXT NOT NULL
+                        , pin TEXT
+                        , balance INTEGER DEFAULT 0
+                                    );"""
 
     def __init__(self):
-        self.account_number = None
-        self.card_number = None
-        self.card_pin = None
-        self.current_balance = 0
         self.db_conn = None
         self.cur = None
         self.db_init()
-        self.show_start_menu()
+        self.db_create_tables()
 
     def db_init(self):
         try:
             self.db_conn = sqlite3.connect(self.db_file)
             self.cur = self.db_conn.cursor()
-            sql_create_card_table = """CREATE TABLE IF NOT EXISTS card (
-                                id INTEGER PRIMARY KEY AUTOINCREMENT
-                                , number TEXT NOT NULL
-                                , pin TEXT
-                                , balance INTEGER DEFAULT 0
-                                            );"""
-            self.create_table(self.db_conn, sql_create_card_table)
         except sqlite3.Error as e:
             print(e)
+
+    def db_create_tables(self):
+        """ This method includes all the tables that should be created in card.s3db
+        """
+        self.create_table(self.db_conn, self.sql_create_card_table)
 
     @staticmethod
     def create_table(db_conn, create_table_sql):
@@ -41,24 +38,67 @@ class SimpleBankingSystem:
         except sqlite3.Error as e:
             print(e)
 
+    def db_insert_account_num(self, acc_num, pin):
+        try:
+            with self.db_conn:
+                self.cur.execute("INSERT INTO card(number, pin) VALUES (:number, :pin)",
+                                 {'number': acc_num, 'pin': pin})
+        except sqlite3.IntegrityError as e:
+            print(e)
+
+    def db_get_card_pin(self, card_num):
+        with self.db_conn:
+            self.cur.execute("SELECT pin FROM card WHERE number=:number", {'number': card_num})
+            return self.cur.fetchone()
+
+    def db_get_card_balance(self, card_num):
+        with self.db_conn:
+            self.cur.execute("SELECT balance FROM card WHERE number=:number", {'number': card_num})
+            return self.cur.fetchone()
+
+    def db_add_income_to_balance(self, card, income):
+        with self.db_conn:
+            self.cur.execute("UPDATE card SET balance = balance + ? WHERE number = ?", (income, card))
+
+    def db_remove_account(self, card_number):
+        with self.db_conn:
+            self.cur.execute("DELETE FROM card WHERE number = ?", (card_number,))
+
+
+class BankingConsoleInterface:
+    start_menu = f'1. Create an account \n2. Log into account \n0. Exit'
+    login_menu = f'1. Balance\n2. Add income\n3. Do transfer\n4. Close account\n5. Log out\n0. Exit'
+    bank_iin = 400000  # Issuer Identification Number (IIN)
+
+    def __init__(self):
+        self.db = BankingDatabase()
+        self.customer = CustomerInfo()
+        self.account_number = None
+        self.card_number = None
+        self.card_pin = None
+        self.current_balance = 0
+        self.show_start_menu()
+
     def show_start_menu(self):
         print(self.start_menu)
         menu_option = int(input())  # TODO: add non-int value handler
         if menu_option == 1:
-            self.db_insert_account_num(self.generate_account_number(), self.generate_card_pin())
-            print(f'\nYour card has been created\nYour card number:\n{self.card_number}\nYour card PIN:\n{self.card_pin}\n')
+            self.db.db_insert_account_num(self.generate_account_number(), self.generate_card_pin())
+            print(
+                f'\nYour card has been created\nYour card number:\n{self.card_number}\nYour card PIN:\n{self.card_pin}\n')
             self.show_start_menu()
         elif menu_option == 2:
             self.log_in()
         elif menu_option == 0:
-            self.cur.close()
-            self.db_conn.close()
+            self.db.cur.close()
+            self.db.db_conn.close()
             print('\nBye!')
         else:
             print('\nPlease, choose one of the existing Menu options\n')
             self.show_start_menu()
 
     def generate_account_number(self):
+        # TODO: move simple generators to class BankingUtils
         self.account_number = self.concatenate_integers(self.bank_iin, randint(100000000, 200000000))
         self.card_number = self.concatenate_integers(self.account_number, self.return_checksum(self.account_number))
         return self.card_number
@@ -90,10 +130,10 @@ class SimpleBankingSystem:
         self.card_number = input('Enter your card number:\n').strip()
         self.card_pin = input('Enter your PIN:\n').strip()
         try:
-            if self.db_get_card_pin(self.card_number) is None:
+            if self.db.db_get_card_pin(self.card_number) is None:
                 print('\nWrong card number or PIN!\n')
                 self.show_start_menu()
-            elif self.db_get_card_pin(self.card_number)[0] == self.card_pin:
+            elif self.db.db_get_card_pin(self.card_number)[0] == self.card_pin:
                 print('\nYou have successfully logged in!\n')
                 self.show_account_menu()
             else:
@@ -106,25 +146,25 @@ class SimpleBankingSystem:
         print(self.login_menu)
         account_option = int(input())
         if account_option == 1:
-            print(f'\nBalance: {self.db_get_card_balance(self.card_number)[0]}\n')
+            print(f'\nBalance: {self.db.db_get_card_balance(self.card_number)[0]}\n')
             self.show_account_menu()
         elif account_option == 2:
             income = int(input('Enter income:\n').strip())
-            self.db_add_income_to_balance(self.card_number, income)
+            self.db.db_add_income_to_balance(self.card_number, income)
             print('\nIncome was added!\n')
             self.show_account_menu()
         elif account_option == 3:
             self.transfer_amount()
         elif account_option == 4:
-            self.db_remove_account()
+            self.db.db_remove_account(self.card_number)
             print('\nThe account has been closed!\n')
             self.show_start_menu()
         elif account_option == 5:
             print('\nYou have successfully logged out!\n')
             self.show_start_menu()
         elif account_option == 0:
-            self.cur.close()
-            self.db_conn.close()
+            self.db.cur.close()
+            self.db.db_conn.close()
             print('\nBye!')
         else:
             print('\nPlease, choose one of the existing Login options\n')
@@ -138,47 +178,31 @@ class SimpleBankingSystem:
         elif transfer_card[-1] != str(self.return_checksum(transfer_card[:-1])):
             print('\nProbably you made a mistake in the card number. Please try again!\n')
             self.show_account_menu()
-        elif self.db_get_card_balance(transfer_card) is None:
+        elif self.db.db_get_card_balance(transfer_card) is None:
             print('\nSuch a card does not exist.\n')
             self.show_account_menu()
         else:
             transfer_amount = int(input('Enter how much money you want to transfer:\n').strip())
-            if transfer_amount > self.db_get_card_balance(self.card_number)[0]:
+            if transfer_amount > self.db.db_get_card_balance(self.card_number)[0]:
                 print('Not enough money!\n')
                 self.show_account_menu()
             else:
-                self.db_add_income_to_balance(self.card_number, -transfer_amount)
-                self.db_add_income_to_balance(transfer_card, transfer_amount)
+                # TODO: make transactional on a DB level (ex. open transaction, commit)
+                self.db.db_add_income_to_balance(self.card_number, -transfer_amount)
+                self.db.db_add_income_to_balance(transfer_card, transfer_amount)
                 print('Success!\n')
                 self.show_account_menu()
 
-    def db_insert_account_num(self, acc_num, pin):
-        try:
-            with self.db_conn:
-                self.cur.execute("INSERT INTO card(number, pin) VALUES (:number, :pin)",
-                                 {'number': acc_num, 'pin': pin})
-        except sqlite3.IntegrityError as e:
-            print(e)
 
-    def db_get_card_pin(self, card_num):
-        with self.db_conn:
-            self.cur.execute("SELECT pin FROM card WHERE number=:number", {'number': card_num})
-            return self.cur.fetchone()
-
-    def db_get_card_balance(self, card_num):
-        with self.db_conn:
-            self.cur.execute("SELECT balance FROM card WHERE number=:number", {'number': card_num})
-            return self.cur.fetchone()
-
-    def db_add_income_to_balance(self, card, income):
-        with self.db_conn:
-            self.cur.execute("UPDATE card SET balance = balance + ? WHERE number = ?", (income, card))
-
-    def db_remove_account(self):
-        with self.db_conn:
-            self.cur.execute("DELETE FROM card WHERE number = ?", (self.card_number,))
+class CustomerInfo:
+    # POJO
+    def __init__(self):
+        self.account_number = None
+        self.card_number = None
+        self.card_pin = None
+        self.current_balance = 0
 
 
 if __name__ == '__main__':
-    stage_3 = SimpleBankingSystem()
+    BankingConsoleInterface()
 exit()
