@@ -1,13 +1,13 @@
-# simple_banking_system
-## About:
+# Simple Banking System
+### About:
 - This project is a part of JetBrains Academy Python Developer Track
 - https://hyperskill.org/projects/109?track=2
 
-## Objectives:
+### Objectives:
 - Luhn algorithm for banking cards
 - sqlite database for storing the data
 
-## How this program works
+### How this program works
 Once program starts, you will have the next Start Menu Options:
 ```
 1. Create an account
@@ -25,4 +25,5 @@ After successful log in to your bank account, you will see Login Menu:
 0. Exit
 ```
 
-## Demo
+### Demo
+![demo](https://github.com/data-anna/simple_banking_system/blob/3ea004ff51ab9c760b37573bf6dca7f0eb190d6f/demo.gif)
