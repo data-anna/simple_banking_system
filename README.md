@@ -1,9 +1,7 @@
 # Simple Banking System
-### About:
+### About
 - This project is a part of JetBrains Academy Python Developer Track
 - https://hyperskill.org/projects/109?track=2
-
-### Objectives:
 - Luhn algorithm for banking cards
 - sqlite database for storing the data
 
