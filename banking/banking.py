@@ -65,6 +65,15 @@ class BankingDatabase:
             self.cur.execute("DELETE FROM card WHERE number = ?", (card_number,))
 
 
+class CustomerInfo:
+    # POJO
+    def __init__(self):
+        self.account_number = None
+        self.card_number = None
+        self.card_pin = None
+        self.current_balance = 0
+
+
 class BankingConsoleInterface:
     start_menu = f'1. Create an account \n2. Log into account \n0. Exit'
     login_menu = f'1. Balance\n2. Add income\n3. Do transfer\n4. Close account\n5. Log out\n0. Exit'
@@ -73,19 +82,21 @@ class BankingConsoleInterface:
     def __init__(self):
         self.db = BankingDatabase()
         self.customer = CustomerInfo()
-        self.account_number = None
-        self.card_number = None
-        self.card_pin = None
-        self.current_balance = 0
         self.show_start_menu()
 
     def show_start_menu(self):
         print(self.start_menu)
-        menu_option = int(input())  # TODO: add non-int value handler
+        try:
+            global menu_option
+            menu_option = int(input())
+        except ValueError:
+            print('\nPlease, choose one of the existing Menu options\n')
+            self.show_start_menu()
+
         if menu_option == 1:
             self.db.db_insert_account_num(self.generate_account_number(), self.generate_card_pin())
             print(
-                f'\nYour card has been created\nYour card number:\n{self.card_number}\nYour card PIN:\n{self.card_pin}\n')
+                f'\nYour card has been created\nYour card number:\n{self.customer.card_number}\nYour card PIN:\n{self.customer.card_pin}\n')
             self.show_start_menu()
         elif menu_option == 2:
             self.log_in()
@@ -99,9 +110,10 @@ class BankingConsoleInterface:
 
     def generate_account_number(self):
         # TODO: move simple generators to class BankingUtils
-        self.account_number = self.concatenate_integers(self.bank_iin, randint(100000000, 200000000))
-        self.card_number = self.concatenate_integers(self.account_number, self.return_checksum(self.account_number))
-        return self.card_number
+        self.customer.account_number = self.concatenate_integers(self.bank_iin, randint(100000000, 200000000))
+        self.customer.card_number = self.concatenate_integers(self.customer.account_number,
+                                                              self.return_checksum(self.customer.account_number))
+        return self.customer.card_number
 
     @staticmethod
     def concatenate_integers(num1, num2):
@@ -123,17 +135,17 @@ class BankingConsoleInterface:
         return 10 - (counter % 10) if (counter % 10) > 0 else 0
 
     def generate_card_pin(self):
-        self.card_pin = str(randint(0000, 9999)).zfill(4)
-        return self.card_pin
+        self.customer.card_pin = str(randint(0000, 9999)).zfill(4)
+        return self.customer.card_pin
 
     def log_in(self):
-        self.card_number = input('Enter your card number:\n').strip()
-        self.card_pin = input('Enter your PIN:\n').strip()
+        self.customer.card_number = input('Enter your card number:\n').strip()
+        self.customer.card_pin = input('Enter your PIN:\n').strip()
         try:
-            if self.db.db_get_card_pin(self.card_number) is None:
+            if self.db.db_get_card_pin(self.customer.card_number) is None:
                 print('\nWrong card number or PIN!\n')
                 self.show_start_menu()
-            elif self.db.db_get_card_pin(self.card_number)[0] == self.card_pin:
+            elif self.db.db_get_card_pin(self.customer.card_number)[0] == self.customer.card_pin:
                 print('\nYou have successfully logged in!\n')
                 self.show_account_menu()
             else:
@@ -146,17 +158,17 @@ class BankingConsoleInterface:
         print(self.login_menu)
         account_option = int(input())
         if account_option == 1:
-            print(f'\nBalance: {self.db.db_get_card_balance(self.card_number)[0]}\n')
+            print(f'\nBalance: {self.db.db_get_card_balance(self.customer.card_number)[0]}\n')
             self.show_account_menu()
         elif account_option == 2:
             income = int(input('Enter income:\n').strip())
-            self.db.db_add_income_to_balance(self.card_number, income)
+            self.db.db_add_income_to_balance(self.customer.card_number, income)
             print('\nIncome was added!\n')
             self.show_account_menu()
         elif account_option == 3:
             self.transfer_amount()
         elif account_option == 4:
-            self.db.db_remove_account(self.card_number)
+            self.db.db_remove_account(self.customer.card_number)
             print('\nThe account has been closed!\n')
             self.show_start_menu()
         elif account_option == 5:
@@ -172,7 +184,7 @@ class BankingConsoleInterface:
 
     def transfer_amount(self):
         transfer_card = input('Transfer\nEnter card number:\n').strip()
-        if self.card_number == transfer_card:
+        if self.customer.card_number == transfer_card:
             print("\nYou can't transfer money to the same account!\n")
             self.show_account_menu()
         elif transfer_card[-1] != str(self.return_checksum(transfer_card[:-1])):
@@ -183,24 +195,15 @@ class BankingConsoleInterface:
             self.show_account_menu()
         else:
             transfer_amount = int(input('Enter how much money you want to transfer:\n').strip())
-            if transfer_amount > self.db.db_get_card_balance(self.card_number)[0]:
+            if transfer_amount > self.db.db_get_card_balance(self.customer.card_number)[0]:
                 print('Not enough money!\n')
                 self.show_account_menu()
             else:
                 # TODO: make transactional on a DB level (ex. open transaction, commit)
-                self.db.db_add_income_to_balance(self.card_number, -transfer_amount)
+                self.db.db_add_income_to_balance(self.customer.card_number, -transfer_amount)
                 self.db.db_add_income_to_balance(transfer_card, transfer_amount)
                 print('Success!\n')
                 self.show_account_menu()
-
-
-class CustomerInfo:
-    # POJO
-    def __init__(self):
-        self.account_number = None
-        self.card_number = None
-        self.card_pin = None
-        self.current_balance = 0
 
 
 if __name__ == '__main__':
